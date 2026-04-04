@@ -1461,7 +1461,7 @@ async function beginNewRound() {
 }
 
 async function fetchImagesBackground(pairIdx, roundId) {
-    const pair = PAIRS[pairIdx];\
+    const pair = PAIRS[pairIdx];
     if (!pair) return;
     try {
         const ci = await fetchAniListImage(pair.citizen.name);
