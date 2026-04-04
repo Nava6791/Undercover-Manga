@@ -1267,7 +1267,16 @@ async function loadGame(code) {
         // Save my local vote before overwrite — in case saveGame hasn't completed yet
         const myLocalVote = gameState.votes?.[myName] ?? null;
 
+        // Save currentPairImgs before overwrite — protect locally fetched images from being erased by polling
+        const myCurrentPairImgs = (gameState.currentPairImgs && (gameState.currentPairImgs.citizen || gameState.currentPairImgs.undercover))
+                                  ? { ...gameState.currentPairImgs } : null;
+
         Object.assign(gameState, remote);
+
+        // Restore currentPairImgs if local has images but remote doesn't (race condition with Jikan fetch)
+        if (myCurrentPairImgs && (!gameState.currentPairImgs || (!gameState.currentPairImgs.citizen && !gameState.currentPairImgs.undercover))) {
+            gameState.currentPairImgs = myCurrentPairImgs;
+        }
         gameState.playerName = myName;
         gameState.roomCode   = myCode;
         if (myIsHost) gameState.isHost = true;
