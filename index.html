@@ -946,16 +946,6 @@ const IMGUR_URLS = {
     'Choso': 'https://static.wikia.nocookie.net/jujutsu-kaisen/images/5/5f/Choso_Anime.png',
 };
 
-// Vérifie qu'une URL d'image charge vraiment (évite les 404 silencieux)
-function validateImageUrl(url) {
-    return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => resolve(url);
-        img.onerror = () => resolve(null);
-        img.src = url;
-    });
-}
-
 async function fetchAniListImage(characterName) {
     if (_imgCache[characterName]) return _imgCache[characterName];
 
@@ -971,10 +961,7 @@ async function fetchAniListImage(characterName) {
             const r = await fetch('https://api.jikan.moe/v4/characters/' + FIXED_IDS[characterName]);
             const d = await r.json();
             const url = d?.data?.images?.jpg?.image_url;
-            if (url) {
-                const valid = await validateImageUrl(url);
-                if (valid) { _imgCache[characterName] = url; return url; }
-            }
+            if (url) { _imgCache[characterName] = url; return url; }
         } catch(e) { console.warn('[Jikan ID]', characterName, e.message); }
     }
 
@@ -985,10 +972,7 @@ async function fetchAniListImage(characterName) {
         const r = await fetch('https://api.jikan.moe/v4/characters?q=' + encodeURIComponent(searchName) + '&limit=1');
         const d = await r.json();
         const url = d?.data?.[0]?.images?.jpg?.image_url;
-        if (url) {
-            const valid = await validateImageUrl(url);
-            if (valid) { _imgCache[characterName] = url; return url; }
-        }
+        if (url) { _imgCache[characterName] = url; return url; }
     } catch(e) { console.warn('[Jikan]', characterName, e.message); }
 
     return null;
