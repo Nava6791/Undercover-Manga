@@ -1272,10 +1272,10 @@ async function startPolling(code) {
     if (_realtimeChannel) { try { db.removeChannel(_realtimeChannel); } catch(e) {} _realtimeChannel = null; }
     if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
 
-    // Poll toutes les 2s sans condition — fiable partout (CodeSandbox, mobile, etc.)
+    // Poll toutes les 1s — réactivité maximale
     pollInterval = setInterval(async () => {
         await loadGameAndCheck(code);
-    }, 2000);
+    }, 1000);
 
     // Realtime en bonus (push instantané si dispo)
     try {
@@ -1406,9 +1406,7 @@ window.toggleReady = async function() {
 
 window.startGame = async function() {
     if (!gameState.isHost) return ucAlert('Seul l\'hôte peut lancer la partie');
-    if (gameState.players.length < 3) return ucAlert('3 joueurs minimum requis !');
-    const allReady = gameState.players.every(p => p.ready);
-    if (!allReady) return ucAlert('Tous les joueurs doivent être prêts !');
+    if (gameState.players.length < 2) return ucAlert('2 joueurs minimum requis !');
 
     // Init scores
     gameState.scores = {};
@@ -1463,18 +1461,26 @@ async function beginNewRound() {
 }
 
 async function fetchImagesBackground(pairIdx, roundId) {
-    const pair = PAIRS[pairIdx];
+    const pair = PAIRS[pairIdx];\
     if (!pair) return;
     try {
         const ci = await fetchAniListImage(pair.citizen.name);
         await new Promise(r => setTimeout(r, 500));
         const ui = await fetchAniListImage(pair.undercover.name);
-        // Only save if we're still in the same round
-        if (gameState.roundId === roundId && (ci || ui)) {
-            gameState.currentPairImgs = {
-                citizen: ci || gameState.currentPairImgs?.citizen || '',
-                undercover: ui || gameState.currentPairImgs?.undercover || ''
-            };
+        // Sauvegarder les images même si le roundId a changé — elles servent quand même
+        // pour l'écran de résultat. On vérifie juste qu'on est encore dans la même partie.
+        if (ci || ui) {
+            // Si le round a changé, on ne touche pas aux imgs du round actuel
+            if (gameState.roundId === roundId) {
+                gameState.currentPairImgs = {
+                    citizen: ci || gameState.currentPairImgs?.citizen || '',
+                    undercover: ui || gameState.currentPairImgs?.undercover || ''
+                };
+            } else {
+                // Stocker quand même dans le cache PAIRS pour les écrans de résultat
+                if (ci) pair.citizen.img = ci;
+                if (ui) pair.undercover.img = ui;
+            }
             await saveGame();
             render();
         }
@@ -1631,15 +1637,16 @@ function calculateRoundScores() {
 
     players.forEach(p => {
         if (p.name === undercover) {
-            // +10 per citizen who voted wrong (missed UC)
-            // -10 per citizen who voted correctly (found UC) — implicit via citizensWhoVotedWrong
+            // +10 par citoyen qui a voté faux (n'a pas trouvé l'UC)
+            // +5 bonus si AUCUN citoyen n'a trouvé l'UC
             const gain = citizensWhoVotedWrong * 10;
-            gameState.scores[p.name] += gain;
+            const bonus = undercoverPerfect ? 5 : 0;
+            gameState.scores[p.name] += gain + bonus;
         } else {
             const votedCorrectly = votes[p.name] === undercover;
-            // +5 if voted correctly, -10 if voted wrong (own mistake)
+            // +5 si vote correct, -10 si vote faux
             const selfScore = votedCorrectly ? 5 : -10;
-            // -10 per ally who voted wrong (regardless of own vote)
+            // -10 par allié qui a voté faux
             const alliesWrong = players.filter(x =>
                 x.name !== undercover && x.name !== p.name && votes[x.name] !== undercover
             ).length;
@@ -1868,7 +1875,7 @@ function renderLobby(app) {
                 <p style="font-weight:700;font-size:14px;color:#f5f0eb">${p.name} ${p.isHost ? '<span style="font-size:10px;color:var(--amber);letter-spacing:1px">HÔTE</span>' : ''}</p>
             </div>
             <div>
-                ${p.isHost ? '<span style="font-size:11px;color:rgba(220,38,38,0.6)">—</span>' : (p.ready ? '<span style="color:#4ade80;font-size:13px;font-weight:700">✓</span>' : '<span style="color:rgba(255,255,255,0.2);font-size:13px">○</span>')}
+                ${p.isHost ? '<span style="font-size:11px;color:var(--amber)">👑</span>' : '<span style="color:#4ade80;font-size:13px">✓</span>'}
             </div>
         </div>
     `).join('');
@@ -1928,17 +1935,16 @@ function renderLobby(app) {
                 <!-- Action buttons -->
                 <div style="display:flex;flex-direction:column;gap:8px">
                     ${gameState.isHost
-                        ? `<button class="uc-btn uc-btn-primary" onclick="window.startGame()" ${!allReady || gameState.players.length < 2 ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
-                            ${allReady && gameState.players.length >= 2 ? '▶ Lancer la partie' : 'En attente des joueurs...'}
+                        ? `<button class="uc-btn uc-btn-primary" onclick="window.startGame()" ${gameState.players.length < 2 ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
+                            ${gameState.players.length >= 2 ? '▶ Lancer la partie' : 'En attente de joueurs... (2 min)'}
                            </button>`
-                        : `<button class="uc-btn ${me?.ready ? 'uc-btn-ghost' : 'uc-btn-secondary'}" onclick="window.toggleReady()">
-                            ${me?.ready ? '○ Annuler le prêt' : '✓ Je suis prêt !'}
-                           </button>`
+                        : `<div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:8px">
+                            <div class="loading-dots" style="display:flex;gap:6px"><span></span><span></span><span></span></div>
+                            <p style="color:var(--text-muted);font-size:13px">En attente que l'hôte lance la partie...</p>
+                           </div>`
                     }
                     <button class="uc-btn uc-btn-ghost" onclick="window.goHome()">← Quitter</button>
                 </div>
-
-                ${!gameState.isHost && !me?.ready ? '<p style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:12px">En attente que l\'hôte lance la partie...</p>' : ''}
             </div>
         </div>
     `;
@@ -2010,6 +2016,7 @@ window.launchHints = async function() {
     if (!gameState.isHost) return;
     gameState.screen = 'game-hints';
     gameState.currentTurnIdx = Math.floor(Math.random() * gameState.players.length);
+    gameState.roundStartIdx = gameState.currentTurnIdx;
     await saveGame();
     render();
 };
@@ -2283,18 +2290,18 @@ function renderRoundResult(app) {
     const deltas = {};
     gameState.players.forEach(p => {
         if (p.name === undercover) {
+            // Identique à calculateRoundScores
             const gain = citizensWhoVotedWrong * 10;
-            const loss = votesOnUndercover * 10;
             const bonus = undercoverPerfect ? 5 : 0;
-            deltas[p.name] = gain - loss + bonus;
+            deltas[p.name] = gain + bonus;
         } else {
             const votedCorrectly = votes[p.name] === undercover;
             const alliesWrong = gameState.players.filter(x =>
                 x.name !== undercover && x.name !== p.name && votes[x.name] !== undercover
             ).length;
-            const base = (votedCorrectly ? 10 : 0) - (alliesWrong * 10);
-            const bonus = votedCorrectly ? 5 : 0;
-            deltas[p.name] = base + bonus;
+            const selfScore = votedCorrectly ? 5 : -10;
+            const allyScore = -(alliesWrong * 10);
+            deltas[p.name] = selfScore + allyScore;
         }
     });
 
