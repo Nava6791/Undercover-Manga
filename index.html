@@ -1223,6 +1223,15 @@ async function loadGame(code) {
             gameState.votes[myName] = myLocalVote;
         }
 
+        // Si on attend Mr White et que son guess vient d'arriver, avancer
+        if (gameState.screen === 'game-mrwhite-waiting' && gameState.mrWhiteGuess) {
+            if (gameState.currentRound >= gameState.settings.rounds) {
+                gameState.screen = 'game-final';
+            } else {
+                gameState.screen = 'game-roundresult';
+            }
+        }
+
         render();
 
         // Host: check if all votes are in (in case non-host voted last)
@@ -1676,6 +1685,11 @@ function calculateRoundScores() {
             _calculatingScores = false;
             showMrWhiteGuessPopup(advanceScreen);
         });
+    } else if (mrWhite) {
+        // Je ne suis pas Mr White — attendre que mrWhiteGuess soit soumis
+        // On passe à l'écran d'attente, le polling prendra le relais
+        gameState.screen = 'game-mrwhite-waiting';
+        saveGame().then(() => { _calculatingScores = false; render(); });
     } else {
         advanceScreen();
     }
@@ -1688,19 +1702,24 @@ function showMrWhiteGuessPopup(callback) {
     const pair = PAIRS[gameState.currentPairIdx];
     if (!pair) { callback(); return; }
 
-    const old = document.getElementById('mrwhite-overlay');
-    if (old) old.remove();
+    const oldOv = document.getElementById('mrwhite-overlay');
+    if (oldOv) oldOv.remove();
 
     const ov = document.createElement('div');
     ov.id = 'mrwhite-overlay';
     ov.className = 'uc-overlay';
     ov.innerHTML = `
         <div class="uc-card" style="text-align:center;max-width:380px">
-            <p style="font-size:10px;font-weight:700;color:#c0a0ff;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px">⬜ Mr White</p>
+            <p style="font-size:10px;font-weight:700;color:#c0a0ff;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px">&#9744; Mr White</p>
             <h2 class="font-cinzel" style="font-size:20px;font-weight:900;color:#ffffff;margin-bottom:6px">Devine le personnage !</h2>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px">Quel était le personnage des citoyens ?<br>Tu n'as qu'<strong style="color:#ffffff">une seule chance</strong>.</p>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Quel &#233;tait le personnage des citoyens ?<br>Tu n&#39;as qu&#39;<strong style="color:#ffffff">une seule chance</strong>.</p>
+            <!-- Timer bar -->
+            <div style="width:100%;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;margin-bottom:14px;overflow:hidden">
+                <div id="mrwhite-timer-bar" style="height:100%;width:100%;background:linear-gradient(90deg,#7c3aed,#c0a0ff);border-radius:2px;transition:width 1s linear"></div>
+            </div>
+            <p style="font-size:22px;font-weight:900;color:#c0a0ff;margin-bottom:12px" id="mrwhite-timer-count">30</p>
             <input id="mrwhite-input" class="uc-input" placeholder="Nom du personnage..." maxlength="40" style="margin-bottom:14px;text-align:center;font-size:15px">
-            <button class="uc-btn uc-btn-primary" onclick="window.submitMrWhiteGuess()" style="margin-bottom:8px">✓ Valider ma réponse</button>
+            <button class="uc-btn uc-btn-primary" onclick="window.submitMrWhiteGuess()" style="margin-bottom:8px">&#10003; Valider ma r&#233;ponse</button>
         </div>`;
     document.body.appendChild(ov);
 
@@ -1711,9 +1730,39 @@ function showMrWhiteGuessPopup(callback) {
     }
 
     window._mrWhiteCallback = callback;
+
+    // Timer 30s
+    let _seconds = 30;
+    const bar = document.getElementById('mrwhite-timer-bar');
+    const count = document.getElementById('mrwhite-timer-count');
+    window._mrWhiteTimer = setInterval(() => {
+        _seconds--;
+        if (count) count.textContent = _seconds;
+        if (bar) bar.style.width = (_seconds / 30 * 100) + '%';
+        if (_seconds <= 0) {
+            clearInterval(window._mrWhiteTimer);
+            window._mrWhiteTimer = null;
+            // Auto-submit as empty (miss)
+            window.submitMrWhiteGuessAuto();
+        }
+    }, 1000);
+    // Trigger bar animation on next frame
+    requestAnimationFrame(() => { if (bar) bar.style.width = '100%'; });
 }
 
+window.submitMrWhiteGuessAuto = async function() {
+    // Called when timer expires — submit empty guess (miss)
+    if (window._mrWhiteTimer) { clearInterval(window._mrWhiteTimer); window._mrWhiteTimer = null; }
+    const pair = PAIRS[gameState.currentPairIdx];
+    gameState.mrWhiteGuess = { guess: '', correct: false, timedOut: true };
+    const ov = document.getElementById('mrwhite-overlay');
+    if (ov) ov.remove();
+    await saveGame();
+    if (window._mrWhiteCallback) { window._mrWhiteCallback(); window._mrWhiteCallback = null; }
+};
+
 window.submitMrWhiteGuess = async function() {
+    if (window._mrWhiteTimer) { clearInterval(window._mrWhiteTimer); window._mrWhiteTimer = null; }
     const pair = PAIRS[gameState.currentPairIdx];
     const inp = document.getElementById('mrwhite-input');
     const guess = (inp?.value || '').trim();
@@ -1804,6 +1853,7 @@ function render() {
     else if (gameState.screen === 'lobby') renderLobby(app);
     else if (gameState.screen === 'game-hints') renderHints(app);
     else if (gameState.screen === 'game-vote') renderVote(app);
+    else if (gameState.screen === 'game-mrwhite-waiting') renderMrWhiteWaiting(app);
     else if (gameState.screen === 'game-roundresult') renderRoundResult(app);
     else if (gameState.screen === 'game-final') renderFinal(app);
     else { app.innerHTML = '<div style="padding:40px;text-align:center;color:#ffffff">Écran inconnu : ' + gameState.screen + '</div>'; }
@@ -2363,6 +2413,25 @@ function renderVote(app) {
 // ──────────────────────────────────────
 //  GAME-ROUNDRESULT
 // ──────────────────────────────────────
+// ──────────────────────────────────────
+//  MR WHITE WAITING — écran d'attente
+// ──────────────────────────────────────
+function renderMrWhiteWaiting(app) {
+    const mwName = gameState.mrWhiteName;
+    app.innerHTML = `
+        <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:transparent;position:relative">
+            <div style="position:fixed;inset:0;background:rgba(6,3,3,0.88);pointer-events:none;z-index:0"></div>
+            <div style="position:relative;z-index:1;text-align:center;max-width:320px">
+                <p style="font-size:48px;margin-bottom:16px">&#9744;</p>
+                <p class="font-cinzel" style="font-size:11px;letter-spacing:4px;color:#c0a0ff;text-transform:uppercase;margin-bottom:8px">Mr White</p>
+                <h2 class="font-cinzel" style="font-size:24px;font-weight:900;color:#ffffff;margin-bottom:12px">${mwName} devine...</h2>
+                <p style="font-size:13px;color:var(--text-muted);margin-bottom:28px">Attendez en silence &#8212; ne donnez aucun indice !</p>
+                <div class="loading-dots" style="display:flex;gap:6px;justify-content:center"><span></span><span></span><span></span></div>
+            </div>
+        </div>
+    `;
+}
+
 function renderRoundResult(app) {
     const pair = PAIRS[gameState.currentPairIdx];
     const undercover = gameState.undercoverName;
@@ -2411,7 +2480,7 @@ function renderRoundResult(app) {
         let mwContent = '';
         if (mwg) {
             const mwColor = mwg.correct ? '#4ade80' : '#d47070';
-            const mwResult = mwg.correct ? '\u2713 Correct ! +10 pts' : '\u2717 Rat\u00e9 — le bon \u00e9tait : ' + pair.citizen.name;
+            const mwResult = mwg.correct ? '\u2713 Correct ! +10 pts' : (mwg.timedOut ? '\u23f0 Temps \u00e9coul\u00e9 ! Le bon \u00e9tait : ' + pair.citizen.name : '\u2717 Rat\u00e9 \u2014 le bon \u00e9tait : ' + pair.citizen.name);
             mwContent = '<p style="font-size:13px;color:var(--text-dim)">A devin\u00e9 : <strong style="color:#ffffff">' + mwg.guess + '</strong></p>'
                       + '<p style="font-size:14px;font-weight:800;margin-top:4px;color:' + mwColor + '">' + mwResult + '</p>';
         } else {
