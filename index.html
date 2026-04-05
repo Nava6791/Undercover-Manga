@@ -1281,6 +1281,16 @@ window.addEventListener('offline', () => showReconnect(true));
 // ══════════════════════════════════════════════════════
 //  LOBBY ACTIONS
 // ══════════════════════════════════════════════════════
+// Mr White toggle state
+let _mrWhiteEnabled = false;
+window.toggleMrWhite = function() {
+    _mrWhiteEnabled = !_mrWhiteEnabled;
+    const btn = document.getElementById('mrwhite-toggle-btn');
+    const knob = document.getElementById('mrwhite-toggle-knob');
+    if (btn) btn.style.background = _mrWhiteEnabled ? '#7c3aed' : 'rgba(120,20,20,0.3)';
+    if (knob) knob.style.transform = _mrWhiteEnabled ? 'translateX(20px)' : 'translateX(0)';
+};
+
 window.createRoom = async function() {
     const input = document.getElementById('lobby-pseudo');
     const pseudo = input ? input.value.trim() : '';
@@ -1298,7 +1308,7 @@ window.createRoom = async function() {
     gameState.isHost = true;
     gameState.screen = 'lobby';
     gameState.players = [{ name: pseudo, score: 0, ready: true, isHost: true }];
-    const mrWhite = document.getElementById('settings-mrwhite')?.checked || false;
+    const mrWhite = _mrWhiteEnabled || false;
     gameState.settings = { rounds, hintsPerRound: hints, difficulty, customSeries, mrWhite };
     gameState.scores = { [pseudo]: 0 };
     gameState.usedPairIndices = [];
@@ -1880,12 +1890,9 @@ function renderHome(app) {
                             <p style="font-size:13px;font-weight:700;color:#e8e0ff">⬜ Mode Mr White</p>
                             <p style="font-size:11px;color:var(--text-muted);margin-top:2px">4 joueurs min. — Bluff total, guess le perso citoyen</p>
                         </div>
-                        <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px">
-                            <input type="checkbox" id="settings-mrwhite" style="opacity:0;width:0;height:0">
-                            <span onclick="this.previousElementSibling.checked=!this.previousElementSibling.checked;this.style.background=this.previousElementSibling.checked?'#7c3aed':'rgba(120,20,20,0.3)'" style="position:absolute;cursor:pointer;inset:0;background:rgba(120,20,20,0.3);border-radius:24px;transition:0.2s">
-                                <span style="position:absolute;content:'';height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:0.2s;transform:translateX(0)" id="mrwhite-toggle-knob"></span>
-                            </span>
-                        </label>
+                        <div id="mrwhite-toggle-btn" onclick="window.toggleMrWhite()" style="width:44px;height:24px;flex-shrink:0;margin-left:12px;border-radius:24px;background:rgba(120,20,20,0.3);position:relative;cursor:pointer;transition:background 0.2s">
+                            <div id="mrwhite-toggle-knob" style="position:absolute;height:18px;width:18px;left:3px;top:3px;background:white;border-radius:50%;transition:transform 0.2s"></div>
+                        </div>
                     </div>
 
                     <label style="display:block;font-size:11px;font-weight:700;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Difficulté</label>
