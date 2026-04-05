@@ -1598,24 +1598,27 @@ function calculateRoundScores() {
 
     players.forEach(p => {
         if (p.name === undercover) {
-            // +10 par citoyen qui vote mal (n'a pas trouvé l'UC)
+            // UC : +10 par citoyen qui vote mal, -10 par citoyen qui vote bien
             // +5 bonus si TOUS les citoyens votent mal
-            const gain = citizensWhoVotedWrong * 10;
+            const gain = (citizensWhoVotedWrong * 10) - (votesOnUndercover * 10);
             const bonus = undercoverPerfect ? 5 : 0;
             gameState.scores[p.name] += gain + bonus;
         } else {
             const votedCorrectly = votes[p.name] === undercover;
-            // Propre vote : +5 si Undercover, -5 si Citoyen
-            const selfScore = votedCorrectly ? 5 : -5;
-            // Alliés : +10 par allié qui vote Undercover, -10 par allié qui vote Citoyen
+            // Propre vote : +5 si Undercover, -10 si Citoyen
+            const selfScore = votedCorrectly ? 5 : -10;
+            // Alliés : +5 par allié qui vote Undercover, -5 par allié qui vote Citoyen
             const alliesCorrect = players.filter(x =>
                 x.name !== undercover && x.name !== p.name && votes[x.name] === undercover
             ).length;
             const alliesWrong = players.filter(x =>
                 x.name !== undercover && x.name !== p.name && votes[x.name] !== undercover
             ).length;
-            const allyScore = (alliesCorrect * 10) - (alliesWrong * 10);
-            gameState.scores[p.name] += selfScore + allyScore;
+            const allyScore = (alliesCorrect * 5) - (alliesWrong * 5);
+            const rawScore = selfScore + allyScore;
+            // PLAFOND : si le joueur a bien voté, son score de round ne peut pas descendre sous 0
+            const delta = votedCorrectly ? Math.max(0, rawScore) : rawScore;
+            gameState.scores[p.name] += delta;
         }
     });
 
