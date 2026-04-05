@@ -1711,7 +1711,7 @@ window.submitMrWhiteGuess = async function() {
 
     const citizenName = pair?.citizen?.name || '';
     // Comparaison insensible à la casse et aux accents
-    const normalize = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    const normalize = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     const correct = normalize(guess) === normalize(citizenName);
 
     // Stocker le résultat dans gameState
