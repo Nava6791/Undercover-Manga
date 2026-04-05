@@ -2168,7 +2168,7 @@ function renderHints(app) {
                     <div style="flex:1;min-width:0">
                         <p style="font-size:9px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Ton personnage</p>
                         <p style="font-size:16px;font-weight:900;color:${isMrWhite ? '#c0a0ff' : '#ffffff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${myChar.name}</p>
-                        ${isMrWhite ? '<p style="font-size:10px;color:#c0a0ff;margin-top:2px;font-weight:700">⬜ Bluff — tu n'as aucun personnage</p>' : '<p style="font-size:10px;color:var(--text-muted);margin-top:2px">Ne montre pas ton écran</p>'}
+                        ${isMrWhite ? '<p style="font-size:10px;color:#c0a0ff;margin-top:2px;font-weight:700">&#9744; Bluff &#8212; tu n&#39;as aucun personnage</p>' : '<p style="font-size:10px;color:var(--text-muted);margin-top:2px">Ne montre pas ton &#233;cran</p>'}
                     </div>
                     <!-- Scores -->
                     <div style="display:flex;gap:10px;flex-shrink:0">
@@ -2396,6 +2396,25 @@ function renderRoundResult(app) {
 
     const sorted = [...gameState.players].sort((a, b) => (gameState.scores?.[b.name] ?? 0) - (gameState.scores?.[a.name] ?? 0));
 
+    // Pre-compute Mr White result block (no IIFE in template literal)
+    let mrWhiteResultBlock = '';
+    if (gameState.mrWhiteName) {
+        const mwg = gameState.mrWhiteGuess;
+        const mwName = gameState.mrWhiteName;
+        let mwContent = '';
+        if (mwg) {
+            const mwColor = mwg.correct ? '#4ade80' : '#d47070';
+            const mwResult = mwg.correct ? '\u2713 Correct ! +10 pts' : '\u2717 Rat\u00e9 — le bon \u00e9tait : ' + pair.citizen.name;
+            mwContent = '<p style="font-size:13px;color:var(--text-dim)">A devin\u00e9 : <strong style="color:#ffffff">' + mwg.guess + '</strong></p>'
+                      + '<p style="font-size:14px;font-weight:800;margin-top:4px;color:' + mwColor + '">' + mwResult + '</p>';
+        } else {
+            mwContent = '<p style="font-size:12px;color:var(--text-muted)">En attente du guess...</p>';
+        }
+        mrWhiteResultBlock = '<div style="background:rgba(192,160,255,0.08);border:1px solid rgba(192,160,255,0.25);border-radius:10px;padding:10px 14px;text-align:center;margin-bottom:14px">'
+                           + '<p style="font-size:10px;font-weight:700;color:#c0a0ff;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">&#9744; Mr White — ' + mwName + '</p>'
+                           + mwContent + '</div>';
+    }
+
     app.innerHTML = `
         <div style="min-height:100vh;display:flex;flex-direction:column;padding:16px 16px 100px;background:transparent;position:relative;overflow-y:auto">
             <div style="position:fixed;inset:0;background:rgba(4,2,2,0.75);pointer-events:none;z-index:0"></div>
@@ -2444,18 +2463,7 @@ function renderRoundResult(app) {
                 </div>
 
                 <!-- Mr White guess result -->
-                ${gameState.mrWhiteName ? (() => {
-                    const mwg = gameState.mrWhiteGuess;
-                    const mwName = gameState.mrWhiteName;
-                    return `<div style="background:rgba(192,160,255,0.08);border:1px solid rgba(192,160,255,0.25);border-radius:10px;padding:10px 14px;text-align:center;margin-bottom:14px">
-                        <p style="font-size:10px;font-weight:700;color:#c0a0ff;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">⬜ Mr White — ${mwName}</p>
-                        ${mwg
-                            ? `<p style="font-size:13px;color:var(--text-dim)">A deviné : <strong style="color:#ffffff">${mwg.guess}</strong></p>
-                               <p style="font-size:14px;font-weight:800;margin-top:4px;color:${mwg.correct ? '#4ade80' : '#d47070'}">${mwg.correct ? '✓ Correct ! +10 pts' : '✗ Raté — le bon était : ' + pair.citizen.name}</p>`
-                            : `<p style="font-size:12px;color:var(--text-muted)">En attente du guess...</p>`
-                        }
-                    </div>`;
-                })() : ''}
+                ${mrWhiteResultBlock}
 
                 <!-- Votes + score deltas -->
                 <div style="margin-bottom:16px">
